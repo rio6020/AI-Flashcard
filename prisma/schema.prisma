@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+
+}
+
+model Question {
+  id          String       @id @default(cuid())
+  question    String
+  choices     String[]
+  answerIndex Int
+  createdAt   DateTime     @default(now())
+  cardState   CardState?
+  studyLogs   StudyLog[]
+}
+
+model CardState {
+  id           String   @id @default(cuid())
+  easeFactor   Float    @default(2.5)
+  interval     Int      @default(1)
+  repetitions  Int      @default(0)
+  nextReviewAt DateTime @default(now())
+  question     Question @relation(fields: [questionId], references: [id])
+  questionId   String   @unique
+}
+
+model StudyLog {
+  id         String   @id @default(cuid())
+  result     String
+  isCorrect  Boolean
+  studiedAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+}
