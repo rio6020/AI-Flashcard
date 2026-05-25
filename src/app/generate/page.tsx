@@ -142,7 +142,7 @@ export default function Generate() {
                     className={`p-2 rounded-lg border text-sm ${
                       j === q.answerIndex
                         ? "bg-green-50 border-green-400 text-green-700"
-                        : "bg-gray-50"
+                        : "bg-gray-50 text-gray-900"
                     }`}
                   >
                     {j === q.answerIndex ? "✅ " : `${j + 1}. `}
