@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { prisma } from "@/lib/prisma";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
   let result;
 
   if (image) {
@@ -56,5 +58,28 @@ export async function POST(req: NextRequest) {
   const cleaned = responseText.replace(/```json|```/g, "").trim();
   const parsed = JSON.parse(cleaned);
 
-  return NextResponse.json(parsed);
+  // DBに保存
+  const savedQuestions = await Promise.all(
+    parsed.questions.map(
+      (q: { question: string; choices: string[]; answerIndex: number }) =>
+        prisma.question.create({
+          data: {
+            question: q.question,
+            choices: q.choices,
+            answerIndex: q.answerIndex,
+            cardState: {
+              create: {
+                easeFactor: 2.5,
+                interval: 1,
+                repetitions: 0,
+                nextReviewAt: new Date(),
+              },
+            },
+          },
+          include: { cardState: true },
+        })
+    )
+  );
+
+  return NextResponse.json({ questions: savedQuestions });
 }
