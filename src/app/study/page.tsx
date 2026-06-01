@@ -4,9 +4,16 @@ import { Question } from "@/types";
 import { CardResult } from "@/lib/sm2";
 import { checkAnswer } from "@/lib/normalize";
 
+type SubjectOption = { subject: string; unit: string | null };
+
 export default function Study() {
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [isSelecting, setIsSelecting] = useState(true);
+
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState("");
   const [isAnswered, setIsAnswered] = useState(false);
@@ -15,19 +22,116 @@ export default function Study() {
   const [correctCount, setCorrectCount] = useState(0);
 
   useEffect(() => {
-    async function fetchQuestions() {
-      const res = await fetch("/api/questions");
+    async function fetchSubjects() {
+      const res = await fetch("/api/subjects");
       const data = await res.json();
-      setQuestions(data.questions);
-      setIsLoading(false);
+      setSubjects(data.subjects);
     }
-    fetchQuestions();
+    fetchSubjects();
   }, []);
 
-  if (isLoading) {
+  async function handleStart() {
+    setIsLoading(true);
+    const params = new URLSearchParams();
+    if (selectedSubject) params.append("subject", selectedSubject);
+    if (selectedUnit) params.append("unit", selectedUnit);
+    const res = await fetch(`/api/questions?${params.toString()}`);
+    const data = await res.json();
+    setQuestions(data.questions);
+    setIsLoading(false);
+    setIsSelecting(false);
+  }
+
+  // 教科一覧（重複なし）
+  const uniqueSubjects = [...new Set(subjects.map((s) => s.subject))];
+
+  // 選択中の教科の単元一覧
+  const units = subjects
+    .filter((s) => s.subject === selectedSubject && s.unit)
+    .map((s) => s.unit as string);
+
+  if (isSelecting) {
     return (
-      <main className="max-w-xl mx-auto p-8 text-center">
-        <p className="text-gray-500">問題を読み込み中...</p>
+      <main className="max-w-xl mx-auto p-8">
+        <h1 className="text-2xl font-bold mb-6">
+          学習する教科を選んでください
+        </h1>
+
+        {/* 教科選択 */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2">教科</label>
+          <div className="flex flex-wrap gap-2">
+            {uniqueSubjects.map((s) => (
+              <button
+                key={s}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  selectedSubject === s
+                    ? "bg-blue-500 text-white"
+                    : "bg-white text-gray-800"
+                }`}
+                onClick={() => {
+                  setSelectedSubject(s);
+                  setSelectedUnit(null);
+                }}
+              >
+                {s}
+              </button>
+            ))}
+            <button
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                selectedSubject === null
+                  ? "bg-blue-500 text-white"
+                  : "bg-white text-gray-800"
+              }`}
+              onClick={() => {
+                setSelectedSubject(null);
+                setSelectedUnit(null);
+              }}
+            >
+              すべて
+            </button>
+          </div>
+        </div>
+
+        {/* 単元選択 */}
+        {units.length > 0 && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">単元</label>
+            <div className="flex flex-wrap gap-2">
+              {units.map((u) => (
+                <button
+                  key={u}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                    selectedUnit === u
+                      ? "bg-blue-500 text-white"
+                      : "bg-white text-gray-800"
+                  }`}
+                  onClick={() => setSelectedUnit(u)}
+                >
+                  {u}
+                </button>
+              ))}
+              <button
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  selectedUnit === null
+                    ? "bg-blue-500 text-white"
+                    : "bg-white text-gray-800"
+                }`}
+                onClick={() => setSelectedUnit(null)}
+              >
+                すべて
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button
+          className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50"
+          onClick={handleStart}
+          disabled={isLoading}
+        >
+          {isLoading ? "読み込み中..." : "学習を始める"}
+        </button>
       </main>
     );
   }
@@ -100,6 +204,7 @@ export default function Study() {
             setIsCorrect(false);
             setIsFinished(false);
             setCorrectCount(0);
+            setIsSelecting(true);
           }}
         >
           もう一度
