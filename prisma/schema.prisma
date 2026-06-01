@@ -12,6 +12,9 @@ model Question {
   question    String
   choices     String[]
   answerIndex Int
+  answer      String       @default("")
+  subject     String       @default("その他") // 教科（必須）
+  unit        String?      // 単元（任意）
   createdAt   DateTime     @default(now())
   cardState   CardState?
   studyLogs   StudyLog[]

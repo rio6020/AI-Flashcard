@@ -4,8 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const prompt = `
-以下の教材から4択問題を5問作成してください。
+const basePrompt = `
 必ず以下のJSON形式のみで返してください。余分な文字やマークダウンは不要です。
 
 {
@@ -14,18 +13,29 @@ const prompt = `
       "id": "1",
       "question": "問題文",
       "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
-      "answerIndex": 0
+      "answerIndex": 0,
+      "answer": "正解のテキスト"
     }
   ]
 }
 
 answerIndexは正解の選択肢のインデックス（0〜3）です。
+answerは正解の文字列です。
 `;
+
+const teachingPrompt =
+  `以下の教材から4択問題を5問作成してください。\n` + basePrompt;
+const similarPrompt =
+  `以下の問題と同じ形式・難易度・ジャンルで類似の4択問題を5問作成してください。元の問題をそのまま含めないでください。\n` +
+  basePrompt;
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const text = formData.get("text") as string | null;
   const image = formData.get("image") as File | null;
+  const mode = formData.get("mode") as string | null;
+  const subject = formData.get("subject") as string;
+  const unit = formData.get("unit") as string | null;
 
   if (!text && !image) {
     return NextResponse.json(
@@ -35,6 +45,7 @@ export async function POST(req: NextRequest) {
   }
 
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const prompt = mode === "similar" ? similarPrompt : teachingPrompt;
 
   let result;
 
@@ -51,22 +62,29 @@ export async function POST(req: NextRequest) {
       },
     ]);
   } else {
-    result = await model.generateContent(prompt + `\n教材テキスト：\n${text}`);
+    result = await model.generateContent(prompt + `\n入力：\n${text}`);
   }
 
   const responseText = result.response.text();
   const cleaned = responseText.replace(/```json|```/g, "").trim();
   const parsed = JSON.parse(cleaned);
 
-  // DBに保存
   const savedQuestions = await Promise.all(
     parsed.questions.map(
-      (q: { question: string; choices: string[]; answerIndex: number }) =>
+      (q: {
+        question: string;
+        choices: string[];
+        answerIndex: number;
+        answer: string;
+      }) =>
         prisma.question.create({
           data: {
             question: q.question,
             choices: q.choices,
             answerIndex: q.answerIndex,
+            answer: q.answer ?? "",
+            subject,
+            unit: unit || null,
             cardState: {
               create: {
                 easeFactor: 2.5,

@@ -1,35 +1,45 @@
 "use client";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const sampleStats = {
-  totalQuestions: 15,
-  studiedToday: 8,
-  correctRate: 73,
-  streak: 3,
-  weeklyData: [
-    { day: "月", correct: 4, incorrect: 2 },
-    { day: "火", correct: 6, incorrect: 1 },
-    { day: "水", correct: 3, incorrect: 3 },
-    { day: "木", correct: 7, incorrect: 0 },
-    { day: "金", correct: 5, incorrect: 2 },
-    { day: "土", correct: 2, incorrect: 1 },
-    { day: "日", correct: 8, incorrect: 1 },
-  ],
-  reviewCategories: [
-    { label: "🔴 まだ覚えてない", count: 5, category: "again" },
-    { label: "🟡 もう少し", count: 3, category: "hard" },
-  ],
-  pastSessions: [
-    { date: "5月20日", count: 10 },
-    { date: "5月19日", count: 8 },
-    { date: "5月18日", count: 6 },
-  ],
+type DashboardData = {
+  totalQuestions: number;
+  studiedToday: number;
+  correctRate: number;
+  streak: number;
+  weeklyData: { day: string; correct: number; incorrect: number }[];
+  reviewCount: number;
+  pastSessions: { date: string; count: number }[];
 };
 
 export default function Dashboard() {
   const router = useRouter();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchDashboard() {
+      const res = await fetch("/api/dashboard");
+      const json = await res.json();
+      setData(json);
+      setIsLoading(false);
+    }
+    fetchDashboard();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <main className="max-w-2xl mx-auto p-8 text-center">
+        <p className="text-gray-500">読み込み中...</p>
+      </main>
+    );
+  }
+
+  if (!data) return null;
+
   const maxBar = Math.max(
-    ...sampleStats.weeklyData.map((d) => d.correct + d.incorrect)
+    ...data.weeklyData.map((d) => d.correct + d.incorrect),
+    1
   );
 
   return (
@@ -40,21 +50,19 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="border rounded-xl p-4">
           <p className="text-sm text-gray-500">総問題数</p>
-          <p className="text-3xl font-bold mt-1">
-            {sampleStats.totalQuestions}
-          </p>
+          <p className="text-3xl font-bold mt-1">{data.totalQuestions}</p>
         </div>
         <div className="border rounded-xl p-4">
           <p className="text-sm text-gray-500">今日の学習数</p>
-          <p className="text-3xl font-bold mt-1">{sampleStats.studiedToday}</p>
+          <p className="text-3xl font-bold mt-1">{data.studiedToday}</p>
         </div>
         <div className="border rounded-xl p-4">
           <p className="text-sm text-gray-500">正解率</p>
-          <p className="text-3xl font-bold mt-1">{sampleStats.correctRate}%</p>
+          <p className="text-3xl font-bold mt-1">{data.correctRate}%</p>
         </div>
         <div className="border rounded-xl p-4">
           <p className="text-sm text-gray-500">連続学習日数</p>
-          <p className="text-3xl font-bold mt-1">{sampleStats.streak}日 🔥</p>
+          <p className="text-3xl font-bold mt-1">{data.streak}日 🔥</p>
         </div>
       </div>
 
@@ -62,7 +70,7 @@ export default function Dashboard() {
       <div className="border rounded-xl p-6 mb-8">
         <h2 className="text-lg font-bold mb-4">今週の学習</h2>
         <div className="flex items-end gap-2 h-32">
-          {sampleStats.weeklyData.map((d) => (
+          {data.weeklyData.map((d) => (
             <div
               key={d.day}
               className="flex-1 flex flex-col items-center gap-1"
@@ -99,43 +107,53 @@ export default function Dashboard() {
       {/* 復習しよう */}
       <div className="border rounded-xl p-6 mb-8">
         <h2 className="text-lg font-bold mb-4">復習しよう</h2>
-        <ul className="flex flex-col gap-3">
-          {sampleStats.reviewCategories.map((r) => (
-            <li key={r.category} className="flex justify-between items-center">
-              <div>
-                <span className="font-medium">{r.label}</span>
-                <span className="text-gray-500 text-sm ml-2">{r.count}問</span>
-              </div>
-              <button
-                className="bg-blue-500 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-600"
-                onClick={() => router.push(`/study?category=${r.category}`)}
-              >
-                復習する →
-              </button>
-            </li>
-          ))}
-        </ul>
+        {data.reviewCount === 0 ? (
+          <p className="text-gray-500 text-sm">
+            復習が必要な問題はありません🎉
+          </p>
+        ) : (
+          <div className="flex justify-between items-center">
+            <div>
+              <span className="font-medium">🔴 要復習</span>
+              <span className="text-gray-500 text-sm ml-2">
+                {data.reviewCount}問
+              </span>
+            </div>
+            <button
+              className="bg-blue-500 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-600"
+              onClick={() => router.push("/study")}
+            >
+              復習する →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 過去の学習 */}
       <div className="border rounded-xl p-6">
         <h2 className="text-lg font-bold mb-4">過去の学習</h2>
-        <ul className="flex flex-col gap-3">
-          {sampleStats.pastSessions.map((s) => (
-            <li key={s.date} className="flex justify-between items-center">
-              <div>
-                <span className="font-medium">{s.date}</span>
-                <span className="text-gray-500 text-sm ml-2">{s.count}問</span>
-              </div>
-              <button
-                className="bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200"
-                onClick={() => router.push(`/study?date=${s.date}`)}
-              >
-                復習する →
-              </button>
-            </li>
-          ))}
-        </ul>
+        {data.pastSessions.length === 0 ? (
+          <p className="text-gray-500 text-sm">まだ学習履歴がありません</p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {data.pastSessions.map((s) => (
+              <li key={s.date} className="flex justify-between items-center">
+                <div>
+                  <span className="font-medium">{s.date}</span>
+                  <span className="text-gray-500 text-sm ml-2">
+                    {s.count}問
+                  </span>
+                </div>
+                <button
+                  className="bg-gray-100 text-gray-700 text-sm px-4 py-1.5 rounded-lg hover:bg-gray-200"
+                  onClick={() => router.push("/study")}
+                >
+                  復習する →
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </main>
   );

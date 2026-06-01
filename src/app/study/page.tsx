@@ -1,13 +1,16 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Question } from "@/types";
-import { CardResult, initialCardState } from "@/lib/sm2";
+import { CardResult } from "@/lib/sm2";
+import { checkAnswer } from "@/lib/normalize";
 
 export default function Study() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [userAnswer, setUserAnswer] = useState("");
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
 
@@ -41,35 +44,29 @@ export default function Study() {
   }
 
   const currentQuestion = questions[currentIndex];
-  const isAnswered = selectedIndex !== null;
-  const isCorrect = selectedIndex === currentQuestion.answerIndex;
 
-  async function handleSelect(index: number) {
-    if (isAnswered) return;
-    setSelectedIndex(index);
-    const correct = index === currentQuestion.answerIndex;
+  function handleSubmit() {
+    if (!userAnswer.trim()) return;
+    const correct = checkAnswer(userAnswer, currentQuestion.answer);
+    setIsCorrect(correct);
+    setIsAnswered(true);
     if (correct) {
       setCorrectCount((c) => c + 1);
     } else {
-      await saveLog("again", false);
-      setTimeout(() => goNext(), 1000);
+      setTimeout(() => saveLogAndNext("again", false), 1500);
     }
   }
 
-  async function saveLog(result: CardResult, isCorrect: boolean) {
+  async function saveLogAndNext(result: CardResult, correct: boolean) {
     await fetch("/api/study-log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         questionId: currentQuestion.id,
         result,
-        isCorrect,
+        isCorrect: correct,
       }),
     });
-  }
-
-  async function handleNext(result: CardResult) {
-    await saveLog(result, true);
     goNext();
   }
 
@@ -78,7 +75,9 @@ export default function Study() {
       setIsFinished(true);
     } else {
       setCurrentIndex((i) => i + 1);
-      setSelectedIndex(null);
+      setUserAnswer("");
+      setIsAnswered(false);
+      setIsCorrect(false);
     }
   }
 
@@ -96,7 +95,9 @@ export default function Study() {
           className="bg-blue-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-600"
           onClick={() => {
             setCurrentIndex(0);
-            setSelectedIndex(null);
+            setUserAnswer("");
+            setIsAnswered(false);
+            setIsCorrect(false);
             setIsFinished(false);
             setCorrectCount(0);
           }}
@@ -127,59 +128,69 @@ export default function Study() {
 
       {/* 問題 */}
       <div className="border rounded-xl p-6 mb-6">
-        <p className="text-lg font-medium text-gray-900">
+        <p className="text-lg font-medium text-white">
           {currentQuestion.question}
         </p>
       </div>
 
-      {/* 選択肢 */}
-      <ul className="flex flex-col gap-3 mb-6">
-        {currentQuestion.choices.map((choice, i) => {
-          let style = "border bg-white hover:bg-gray-50 text-gray-900";
-          if (isAnswered) {
-            if (i === currentQuestion.answerIndex) {
-              style = "border-green-400 bg-green-50 text-green-700";
-            } else if (i === selectedIndex) {
-              style = "border-red-400 bg-red-50 text-red-700";
-            }
-          }
-          return (
-            <li key={i}>
-              <button
-                className={`w-full text-left p-4 rounded-lg border transition-all ${style}`}
-                onClick={() => handleSelect(i)}
-              >
-                {i + 1}. {choice}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {/* 回答入力 */}
+      {!isAnswered && (
+        <div className="flex flex-col gap-3">
+          <input
+            type="text"
+            className="w-full border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+            placeholder="答えを入力してください"
+            value={userAnswer}
+            onChange={(e) => setUserAnswer(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          />
+          <button
+            className="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50"
+            onClick={handleSubmit}
+            disabled={userAnswer.trim() === ""}
+          >
+            回答する
+          </button>
+        </div>
+      )}
 
-      {/* 回答後のSM-2ボタン */}
+      {/* 回答後 */}
       {isAnswered && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-gray-500 text-center mb-2">
-            {isCorrect
-              ? "✅ 正解！理解度はどのくらいでしたか？"
-              : "❌ 不正解　次に進みます..."}
-          </p>
+        <div className="flex flex-col gap-3">
+          <div
+            className={`p-4 rounded-lg ${
+              isCorrect
+                ? "bg-green-50 border border-green-400"
+                : "bg-red-50 border border-red-400"
+            }`}
+          >
+            <p
+              className={`font-medium ${
+                isCorrect ? "text-green-700" : "text-red-700"
+              }`}
+            >
+              {isCorrect ? "✅ 正解！" : "❌ 不正解"}
+            </p>
+            {!isCorrect && (
+              <p className="text-red-600 text-sm mt-1">
+                正解：{currentQuestion.answer}
+              </p>
+            )}
+            <p className="text-gray-500 text-sm mt-1">
+              あなたの回答：{userAnswer}
+            </p>
+          </div>
+
           {isCorrect && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => handleNext("hard")}
+                onClick={() => saveLogAndNext("hard", true)}
                 className="py-2 rounded-lg bg-orange-100 text-orange-700 text-sm font-medium hover:bg-orange-200"
               >
                 難しい
               </button>
               <button
-                onClick={() => handleNext("good")}
-                className="py-2 rounded-lg bg-blue-100 text-blue-700 text-sm font-medium hover:bg-blue-200"
-              >
-                良い
-              </button>
-              <button
-                onClick={() => handleNext("easy")}
+                onClick={() => saveLogAndNext("easy", true)}
                 className="py-2 rounded-lg bg-green-100 text-green-700 text-sm font-medium hover:bg-green-200"
               >
                 簡単

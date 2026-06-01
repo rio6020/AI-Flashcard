@@ -2,7 +2,10 @@
 import { useState } from "react";
 import { Question, InputMode } from "@/types";
 
+type GenerateMode = "teaching" | "similar";
+
 export default function Generate() {
+  const [generateMode, setGenerateMode] = useState<GenerateMode>("teaching");
   const [mode, setMode] = useState<InputMode>("text");
   const [text, setText] = useState("");
   const [image, setImage] = useState<File | null>(null);
@@ -10,6 +13,9 @@ export default function Generate() {
   const [isLoading, setIsLoading] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [error, setError] = useState("");
+  const [subject, setSubject] = useState("数学");
+  const [customSubject, setCustomSubject] = useState("");
+  const [unit, setUnit] = useState("");
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -25,11 +31,17 @@ export default function Generate() {
 
     try {
       const formData = new FormData();
+      formData.append("mode", generateMode);
       if (mode === "text") {
         formData.append("text", text);
       } else if (image) {
         formData.append("image", image);
       }
+      formData.append(
+        "subject",
+        subject === "その他" ? customSubject : subject
+      );
+      formData.append("unit", unit);
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -50,20 +62,45 @@ export default function Generate() {
       setIsLoading(false);
     }
   }
-
-  const canGenerate = mode === "text" ? text.trim() !== "" : image !== null;
+  const canGenerate =
+    (mode === "text" ? text.trim() !== "" : image !== null) &&
+    (subject !== "その他" || customSubject.trim() !== "");
 
   return (
     <main className="max-w-2xl mx-auto p-8">
       <h1 className="text-2xl font-bold mb-6">問題生成</h1>
 
-      {/* モード切り替え */}
+      {/* 生成モード切り替え */}
+      <div className="flex gap-2 mb-6">
+        <button
+          className={`px-4 py-2 rounded-lg text-sm font-medium ${
+            generateMode === "teaching"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-600"
+          }`}
+          onClick={() => setGenerateMode("teaching")}
+        >
+          教材から生成
+        </button>
+        <button
+          className={`px-4 py-2 rounded-lg text-sm font-medium ${
+            generateMode === "similar"
+              ? "bg-blue-500 text-white"
+              : "bg-gray-100 text-gray-600"
+          }`}
+          onClick={() => setGenerateMode("similar")}
+        >
+          類似問題を生成
+        </button>
+      </div>
+
+      {/* 入力モード切り替え */}
       <div className="flex gap-2 mb-6">
         <button
           className={`px-4 py-2 rounded-lg text-sm font-medium ${
             mode === "text"
               ? "bg-blue-500 text-white"
-              : "bg-gray-100 text-gray-600"
+              : "bg-white text-gray-800"
           }`}
           onClick={() => setMode("text")}
         >
@@ -73,7 +110,7 @@ export default function Generate() {
           className={`px-4 py-2 rounded-lg text-sm font-medium ${
             mode === "image"
               ? "bg-blue-500 text-white"
-              : "bg-gray-100 text-gray-600"
+              : "bg-white text-gray-800"
           }`}
           onClick={() => setMode("image")}
         >
@@ -81,13 +118,67 @@ export default function Generate() {
         </button>
       </div>
 
+      {/* 教科・単元 */}
+      <div className="flex flex-col gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium mb-2">教科</label>
+          <div className="flex flex-wrap gap-2">
+            {["数学", "英語", "理科", "社会", "国語", "その他"].map((s) => (
+              <button
+                key={s}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  subject === s
+                    ? "bg-blue-500 text-white"
+                    : "bg-white text-gray-800"
+                }`}
+                onClick={() => setSubject(s)}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          {subject === "その他" && (
+            <input
+              type="text"
+              className="mt-2 w-full border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="教科名を入力してください"
+              value={customSubject}
+              onChange={(e) => setCustomSubject(e.target.value)}
+            />
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-2">単元</label>
+          <input
+            type="text"
+            className="w-full border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="例：光合成、二次方程式など"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* 説明文 */}
+      <p className="text-sm text-gray-500 mb-4">
+        {generateMode === "teaching"
+          ? "教材のテキストや画像を入力すると、その内容から問題を生成します。"
+          : "問題文や問題集の画像を入力すると、同じ形式・難易度の類似問題を生成します。"}
+      </p>
+
       {/* テキスト入力 */}
       {mode === "text" && (
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">教材テキスト</label>
+          <label className="block text-sm font-medium mb-2">
+            {generateMode === "teaching" ? "教材テキスト" : "問題文"}
+          </label>
           <textarea
             className="w-full border rounded-lg p-3 h-48 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="ここに教材テキストを貼り付けてください..."
+            placeholder={
+              generateMode === "teaching"
+                ? "ここに教材テキストを貼り付けてください..."
+                : "ここに問題文を貼り付けてください..."
+            }
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -97,7 +188,9 @@ export default function Generate() {
       {/* 画像アップロード */}
       {mode === "image" && (
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">参考書の画像</label>
+          <label className="block text-sm font-medium mb-2">
+            {generateMode === "teaching" ? "教材の画像" : "問題集の画像"}
+          </label>
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -126,32 +219,23 @@ export default function Generate() {
         {isLoading ? "生成中..." : "問題を生成する"}
       </button>
 
-      {/* 生成された問題 */}
+      {/* 生成完了 */}
       {questions.length > 0 && (
-        <div className="mt-8 flex flex-col gap-6">
-          <h2 className="text-xl font-bold">生成された問題</h2>
-          {questions.map((q, i) => (
-            <div key={q.id} className="border rounded-lg p-4">
-              <p className="font-medium mb-3">
-                Q{i + 1}. {q.question}
-              </p>
-              <ul className="flex flex-col gap-2">
-                {q.choices.map((choice, j) => (
-                  <li
-                    key={j}
-                    className={`p-2 rounded-lg border text-sm ${
-                      j === q.answerIndex
-                        ? "bg-green-50 border-green-400 text-green-700"
-                        : "bg-gray-50 text-gray-900"
-                    }`}
-                  >
-                    {j === q.answerIndex ? "✅ " : `${j + 1}. `}
-                    {choice}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="mt-8 p-6 border rounded-xl text-center">
+          <p className="text-xl font-bold mb-2">
+            ✅ {questions.length}問の問題が生成されました！
+          </p>
+          <p className="text-gray-500 text-sm mb-6">
+            教科：{questions[0].subject}
+            {questions[0].unit ? `　単元：${questions[0].unit}` : ""}
+          </p>
+
+          <a
+            href="/study"
+            className="inline-block bg-blue-500 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-600"
+          >
+            学習を始める →
+          </a>
         </div>
       )}
     </main>
